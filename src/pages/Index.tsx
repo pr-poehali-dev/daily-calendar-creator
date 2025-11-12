@@ -5,8 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Icon from '@/components/ui/icon';
 
 type EventCategory = 'work' | 'personal' | 'important' | 'leisure';
@@ -19,11 +20,28 @@ interface CalendarEvent {
   description?: string;
 }
 
+interface ScheduleEvent {
+  id: string;
+  title: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  category: EventCategory;
+  description?: string;
+}
+
 const categoryColors: Record<EventCategory, string> = {
   work: 'bg-[hsl(var(--work))]',
   personal: 'bg-[hsl(var(--personal))]',
   important: 'bg-[hsl(var(--important))]',
   leisure: 'bg-[hsl(var(--leisure))]'
+};
+
+const categoryTextColors: Record<EventCategory, string> = {
+  work: 'text-white',
+  personal: 'text-white',
+  important: 'text-white',
+  leisure: 'text-white'
 };
 
 const categoryLabels: Record<EventCategory, string> = {
@@ -58,12 +76,60 @@ const Index = () => {
       category: 'leisure'
     }
   ]);
+
+  const [scheduleEvents, setScheduleEvents] = useState<ScheduleEvent[]>([
+    {
+      id: 's1',
+      title: 'Йога',
+      dayOfWeek: 1,
+      startTime: '08:00',
+      endTime: '09:00',
+      category: 'personal'
+    },
+    {
+      id: 's2',
+      title: 'Рабочая встреча',
+      dayOfWeek: 1,
+      startTime: '10:00',
+      endTime: '11:30',
+      category: 'work'
+    },
+    {
+      id: 's3',
+      title: 'Английский язык',
+      dayOfWeek: 2,
+      startTime: '18:00',
+      endTime: '19:30',
+      category: 'important'
+    },
+    {
+      id: 's4',
+      title: 'Тренировка',
+      dayOfWeek: 3,
+      startTime: '19:00',
+      endTime: '20:30',
+      category: 'personal'
+    }
+  ]);
+
   const [newEvent, setNewEvent] = useState({
     title: '',
     category: 'personal' as EventCategory,
     description: ''
   });
+
+  const [newScheduleEvent, setNewScheduleEvent] = useState({
+    title: '',
+    dayOfWeek: 1,
+    startTime: '09:00',
+    endTime: '10:00',
+    category: 'personal' as EventCategory,
+    description: ''
+  });
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
+  const [selectedScheduleSlot, setSelectedScheduleSlot] = useState<{ day: number; time: string } | null>(null);
 
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
@@ -111,10 +177,36 @@ const Index = () => {
     setIsDialogOpen(false);
   };
 
+  const handleAddScheduleEvent = () => {
+    if (!newScheduleEvent.title) return;
+    
+    const event: ScheduleEvent = {
+      id: Date.now().toString(),
+      ...newScheduleEvent
+    };
+    
+    setScheduleEvents([...scheduleEvents, event]);
+    setNewScheduleEvent({
+      title: '',
+      dayOfWeek: selectedScheduleSlot?.day || 1,
+      startTime: '09:00',
+      endTime: '10:00',
+      category: 'personal',
+      description: ''
+    });
+    setIsScheduleDialogOpen(false);
+  };
+
   const handleDateClick = (day: number) => {
     const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
     setSelectedDate(date);
     setIsDialogOpen(true);
+  };
+
+  const handleScheduleSlotClick = (day: number, time: string) => {
+    setSelectedScheduleSlot({ day, time });
+    setNewScheduleEvent({ ...newScheduleEvent, dayOfWeek: day, startTime: time });
+    setIsScheduleDialogOpen(true);
   };
 
   const upcomingEvents = events
@@ -128,6 +220,28 @@ const Index = () => {
   ];
 
   const dayNames = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+  const fullDayNames = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+
+  const timeSlots = Array.from({ length: 15 }, (_, i) => {
+    const hour = i + 7;
+    return `${hour.toString().padStart(2, '0')}:00`;
+  });
+
+  const getScheduleEventsForSlot = (day: number, time: string) => {
+    return scheduleEvents.filter(event => {
+      if (event.dayOfWeek !== day) return false;
+      const eventStart = event.startTime;
+      const eventEnd = event.endTime;
+      return time >= eventStart && time < eventEnd;
+    });
+  };
+
+  const calculateEventHeight = (startTime: string, endTime: string) => {
+    const [startHour, startMin] = startTime.split(':').map(Number);
+    const [endHour, endMin] = endTime.split(':').map(Number);
+    const durationMinutes = (endHour * 60 + endMin) - (startHour * 60 + startMin);
+    return (durationMinutes / 60) * 60;
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background p-4 md:p-8">
@@ -136,126 +250,207 @@ const Index = () => {
           <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-primary via-accent to-secondary bg-clip-text text-transparent mb-2">
             Мой Календарь
           </h1>
-          <p className="text-muted-foreground text-lg">Планируйте свои события с цветовыми категориями</p>
+          <p className="text-muted-foreground text-lg">Планируйте события и расписание занятий</p>
         </header>
 
-        <div className="grid lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-2 p-6 shadow-lg animate-scale-in">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold">
-                {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
-              </h2>
-              <div className="flex gap-2">
-                <Button variant="outline" size="icon" onClick={goToPreviousMonth}>
-                  <Icon name="ChevronLeft" size={20} />
-                </Button>
-                <Button variant="outline" size="icon" onClick={goToNextMonth}>
-                  <Icon name="ChevronRight" size={20} />
-                </Button>
-              </div>
-            </div>
+        <Tabs defaultValue="calendar" className="space-y-6">
+          <TabsList className="grid w-full max-w-md mx-auto grid-cols-2">
+            <TabsTrigger value="calendar" className="flex items-center gap-2">
+              <Icon name="Calendar" size={16} />
+              Календарь
+            </TabsTrigger>
+            <TabsTrigger value="schedule" className="flex items-center gap-2">
+              <Icon name="CalendarClock" size={16} />
+              Расписание
+            </TabsTrigger>
+          </TabsList>
 
-            <div className="grid grid-cols-7 gap-2 mb-2">
-              {dayNames.map(day => (
-                <div key={day} className="text-center font-semibold text-sm text-muted-foreground p-2">
-                  {day}
+          <TabsContent value="calendar" className="space-y-6">
+            <div className="grid lg:grid-cols-3 gap-6">
+              <Card className="lg:col-span-2 p-6 shadow-lg animate-scale-in">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold">
+                    {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
+                  </h2>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="icon" onClick={goToPreviousMonth}>
+                      <Icon name="ChevronLeft" size={20} />
+                    </Button>
+                    <Button variant="outline" size="icon" onClick={goToNextMonth}>
+                      <Icon name="ChevronRight" size={20} />
+                    </Button>
+                  </div>
                 </div>
-              ))}
-            </div>
 
-            <div className="grid grid-cols-7 gap-2">
-              {Array.from({ length: startingDayOfWeek }).map((_, i) => (
-                <div key={`empty-${i}`} className="aspect-square" />
-              ))}
-              
-              {Array.from({ length: daysInMonth }).map((_, i) => {
-                const day = i + 1;
-                const dayEvents = getEventsForDate(day);
-                const isToday = 
-                  day === new Date().getDate() &&
-                  currentDate.getMonth() === new Date().getMonth() &&
-                  currentDate.getFullYear() === new Date().getFullYear();
-
-                return (
-                  <button
-                    key={day}
-                    onClick={() => handleDateClick(day)}
-                    className={`aspect-square p-2 rounded-lg border-2 transition-all hover:scale-105 hover:shadow-md ${
-                      isToday 
-                        ? 'border-primary bg-primary/10 font-bold' 
-                        : 'border-border hover:border-primary/50'
-                    }`}
-                  >
-                    <div className="text-sm mb-1">{day}</div>
-                    <div className="flex flex-wrap gap-1 justify-center">
-                      {dayEvents.slice(0, 3).map(event => (
-                        <div
-                          key={event.id}
-                          className={`w-1.5 h-1.5 rounded-full ${categoryColors[event.category]}`}
-                        />
-                      ))}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </Card>
-
-          <div className="space-y-6 animate-slide-up">
-            <Card className="p-6 shadow-lg">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold">Ближайшие события</h3>
-                <Icon name="Bell" size={20} className="text-primary" />
-              </div>
-              
-              {upcomingEvents.length === 0 ? (
-                <p className="text-muted-foreground text-center py-8">Нет предстоящих событий</p>
-              ) : (
-                <div className="space-y-3">
-                  {upcomingEvents.map(event => (
-                    <div
-                      key={event.id}
-                      className="p-3 rounded-lg border border-border hover:border-primary/50 transition-all hover:shadow-md"
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className={`w-1 h-full rounded-full ${categoryColors[event.category]}`} />
-                        <div className="flex-1">
-                          <h4 className="font-semibold mb-1">{event.title}</h4>
-                          <p className="text-sm text-muted-foreground mb-2">
-                            {event.date.toLocaleDateString('ru-RU', { 
-                              day: 'numeric', 
-                              month: 'long' 
-                            })}
-                          </p>
-                          {event.description && (
-                            <p className="text-sm text-muted-foreground">{event.description}</p>
-                          )}
-                        </div>
-                      </div>
+                <div className="grid grid-cols-7 gap-2 mb-2">
+                  {dayNames.map(day => (
+                    <div key={day} className="text-center font-semibold text-sm text-muted-foreground p-2">
+                      {day}
                     </div>
                   ))}
                 </div>
-              )}
-            </Card>
 
-            <Card className="p-6 shadow-lg">
-              <h3 className="text-xl font-bold mb-4">Категории</h3>
-              <div className="space-y-2">
-                {(Object.keys(categoryLabels) as EventCategory[]).map(category => (
-                  <div key={category} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-4 h-4 rounded-full ${categoryColors[category]}`} />
-                      <span className="font-medium">{categoryLabels[category]}</span>
-                    </div>
-                    <Badge variant="secondary">
-                      {events.filter(e => e.category === category).length}
-                    </Badge>
+                <div className="grid grid-cols-7 gap-2">
+                  {Array.from({ length: startingDayOfWeek }).map((_, i) => (
+                    <div key={`empty-${i}`} className="aspect-square" />
+                  ))}
+                  
+                  {Array.from({ length: daysInMonth }).map((_, i) => {
+                    const day = i + 1;
+                    const dayEvents = getEventsForDate(day);
+                    const isToday = 
+                      day === new Date().getDate() &&
+                      currentDate.getMonth() === new Date().getMonth() &&
+                      currentDate.getFullYear() === new Date().getFullYear();
+
+                    return (
+                      <button
+                        key={day}
+                        onClick={() => handleDateClick(day)}
+                        className={`aspect-square p-2 rounded-lg border-2 transition-all hover:scale-105 hover:shadow-md ${
+                          isToday 
+                            ? 'border-primary bg-primary/10 font-bold' 
+                            : 'border-border hover:border-primary/50'
+                        }`}
+                      >
+                        <div className="text-sm mb-1">{day}</div>
+                        <div className="flex flex-wrap gap-1 justify-center">
+                          {dayEvents.slice(0, 3).map(event => (
+                            <div
+                              key={event.id}
+                              className={`w-1.5 h-1.5 rounded-full ${categoryColors[event.category]}`}
+                            />
+                          ))}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </Card>
+
+              <div className="space-y-6 animate-slide-up">
+                <Card className="p-6 shadow-lg">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold">Ближайшие события</h3>
+                    <Icon name="Bell" size={20} className="text-primary" />
                   </div>
-                ))}
+                  
+                  {upcomingEvents.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-8">Нет предстоящих событий</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {upcomingEvents.map(event => (
+                        <div
+                          key={event.id}
+                          className="p-3 rounded-lg border border-border hover:border-primary/50 transition-all hover:shadow-md"
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className={`w-1 h-full rounded-full ${categoryColors[event.category]}`} />
+                            <div className="flex-1">
+                              <h4 className="font-semibold mb-1">{event.title}</h4>
+                              <p className="text-sm text-muted-foreground mb-2">
+                                {event.date.toLocaleDateString('ru-RU', { 
+                                  day: 'numeric', 
+                                  month: 'long' 
+                                })}
+                              </p>
+                              {event.description && (
+                                <p className="text-sm text-muted-foreground">{event.description}</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Card>
+
+                <Card className="p-6 shadow-lg">
+                  <h3 className="text-xl font-bold mb-4">Категории</h3>
+                  <div className="space-y-2">
+                    {(Object.keys(categoryLabels) as EventCategory[]).map(category => (
+                      <div key={category} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-4 h-4 rounded-full ${categoryColors[category]}`} />
+                          <span className="font-medium">{categoryLabels[category]}</span>
+                        </div>
+                        <Badge variant="secondary">
+                          {events.filter(e => e.category === category).length}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="schedule" className="space-y-6">
+            <Card className="p-6 shadow-lg animate-scale-in">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold">Недельное расписание</h2>
+                <Button onClick={() => setIsScheduleDialogOpen(true)}>
+                  <Icon name="Plus" size={16} className="mr-2" />
+                  Добавить занятие
+                </Button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <div className="min-w-[800px]">
+                  <div className="grid grid-cols-8 gap-2">
+                    <div className="text-sm font-semibold text-muted-foreground p-2">Время</div>
+                    {[1, 2, 3, 4, 5, 6, 0].map(day => (
+                      <div key={day} className="text-center font-semibold text-sm p-2">
+                        {fullDayNames[day]}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="relative">
+                    {timeSlots.map((time, timeIndex) => (
+                      <div key={time} className="grid grid-cols-8 gap-2 border-t border-border">
+                        <div className="text-sm text-muted-foreground p-2 font-medium">
+                          {time}
+                        </div>
+                        {[1, 2, 3, 4, 5, 6, 0].map(day => {
+                          const slotEvents = getScheduleEventsForSlot(day, time);
+                          const isFirstSlot = slotEvents.length > 0 && slotEvents[0].startTime === time;
+                          
+                          return (
+                            <div
+                              key={`${day}-${time}`}
+                              className="min-h-[60px] relative"
+                            >
+                              {isFirstSlot ? (
+                                slotEvents.map(event => (
+                                  <div
+                                    key={event.id}
+                                    className={`absolute inset-x-0 top-0 p-2 rounded-lg ${categoryColors[event.category]} ${categoryTextColors[event.category]} shadow-md transition-all hover:scale-105 cursor-pointer`}
+                                    style={{ height: `${calculateEventHeight(event.startTime, event.endTime)}px` }}
+                                  >
+                                    <div className="font-semibold text-sm">{event.title}</div>
+                                    <div className="text-xs opacity-90 mt-1">
+                                      {event.startTime} - {event.endTime}
+                                    </div>
+                                  </div>
+                                ))
+                              ) : slotEvents.length === 0 ? (
+                                <button
+                                  onClick={() => handleScheduleSlotClick(day, time)}
+                                  className="w-full h-full hover:bg-muted/50 rounded transition-colors"
+                                />
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </Card>
-          </div>
-        </div>
+          </TabsContent>
+        </Tabs>
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -322,6 +517,93 @@ const Index = () => {
             <Button onClick={handleAddEvent} className="w-full" disabled={!newEvent.title}>
               <Icon name="Plus" size={16} className="mr-2" />
               Добавить событие
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isScheduleDialogOpen} onOpenChange={setIsScheduleDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Добавить занятие в расписание</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="schedule-title">Название занятия</Label>
+              <Input
+                id="schedule-title"
+                value={newScheduleEvent.title}
+                onChange={(e) => setNewScheduleEvent({ ...newScheduleEvent, title: e.target.value })}
+                placeholder="Введите название..."
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="day">День недели</Label>
+              <Select
+                value={newScheduleEvent.dayOfWeek.toString()}
+                onValueChange={(value) => setNewScheduleEvent({ ...newScheduleEvent, dayOfWeek: parseInt(value) })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {fullDayNames.map((name, index) => (
+                    <SelectItem key={index} value={index.toString()}>
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="start-time">Начало</Label>
+                <Input
+                  id="start-time"
+                  type="time"
+                  value={newScheduleEvent.startTime}
+                  onChange={(e) => setNewScheduleEvent({ ...newScheduleEvent, startTime: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="end-time">Конец</Label>
+                <Input
+                  id="end-time"
+                  type="time"
+                  value={newScheduleEvent.endTime}
+                  onChange={(e) => setNewScheduleEvent({ ...newScheduleEvent, endTime: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="schedule-category">Категория</Label>
+              <Select
+                value={newScheduleEvent.category}
+                onValueChange={(value: EventCategory) => setNewScheduleEvent({ ...newScheduleEvent, category: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(categoryLabels) as EventCategory[]).map(category => (
+                    <SelectItem key={category} value={category}>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-3 h-3 rounded-full ${categoryColors[category]}`} />
+                        {categoryLabels[category]}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Button onClick={handleAddScheduleEvent} className="w-full" disabled={!newScheduleEvent.title}>
+              <Icon name="Plus" size={16} className="mr-2" />
+              Добавить занятие
             </Button>
           </div>
         </DialogContent>
